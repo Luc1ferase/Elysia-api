@@ -17,7 +17,7 @@ const marketBody = t.Object({
   taxRate: t.Optional(t.Numeric({ minimum: 0 })),
   fixedAdjustment: t.Optional(t.Numeric()),
   promotionFeeCap: t.Optional(t.Numeric({ minimum: 0 })),
-  shippingStrategy: t.Optional(t.Union([t.Literal('rounded_weight_lookup'), t.Literal('exact_weight_lookup')])),
+  shippingStrategy: t.Optional(t.Union([t.Literal('rounded_weight_lookup'), t.Literal('exact_weight_lookup'), t.Literal('taiwan_ifs')])),
   notes: t.Optional(t.String()),
 });
 
@@ -128,4 +128,3 @@ export const marketRoutes = new Elysia()
       }
       set.status = 204;
     }));
-
