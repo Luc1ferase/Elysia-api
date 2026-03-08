@@ -109,11 +109,12 @@ async function replaceWorkspaceSnapshot(snapshot: SnapshotPayload) {
 
     for (const listing of snapshot.listings) {
       await client.query(`
-        insert into pricing_listings (id, product_id, market_id, local_price, is_active, created_at, updated_at)
-        values ($1, $2, $3, $4, $5, $6, $7)
+        insert into pricing_listings (id, product_id, market_id, market_sku, local_price, is_active, created_at, updated_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
         on conflict (id) do update set
           product_id = excluded.product_id,
           market_id = excluded.market_id,
+          market_sku = excluded.market_sku,
           local_price = excluded.local_price,
           is_active = excluded.is_active,
           created_at = excluded.created_at,
@@ -122,6 +123,7 @@ async function replaceWorkspaceSnapshot(snapshot: SnapshotPayload) {
         listing.id,
         listing.productId,
         listing.marketId,
+        (listing as Listing & { marketSku?: string }).marketSku ?? '',
         listing.localPrice,
         listing.isActive,
         new Date(listing.createdAt),

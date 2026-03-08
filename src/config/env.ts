@@ -18,11 +18,8 @@ function readText(name: string, fallback: string) {
   return process.env[name]?.trim() || fallback;
 }
 
-const databaseUrl = process.env.DATABASE_URL?.trim();
-
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is required');
-}
+const defaultDatabaseUrl = 'postgres://elysia:Fezr8tg-_qfvqGHy!P38@pgm-bp112i5yr59280w7po.pg.rds.aliyuncs.com:5432/elysia';
+const databaseUrl = process.env.DATABASE_URL?.trim() || defaultDatabaseUrl;
 
 export const env = {
   databaseUrl,

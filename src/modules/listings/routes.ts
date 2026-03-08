@@ -8,6 +8,7 @@ import { createId } from '../../lib/id.js';
 const listingBody = t.Object({
   productId: t.String({ minLength: 1 }),
   marketId: t.String({ minLength: 1 }),
+  marketSku: t.Optional(t.String()),
   localPrice: t.Numeric({ minimum: 0 }),
   isActive: t.Optional(t.Boolean()),
 });
@@ -26,6 +27,7 @@ export const listingRoutes = new Elysia({ prefix: '/listings' })
       id: createId('lst'),
       productId: body.productId,
       marketId: body.marketId,
+      marketSku: body.marketSku ?? '',
       localPrice: body.localPrice,
       isActive: body.isActive ?? true,
       createdAt: now,
@@ -38,6 +40,7 @@ export const listingRoutes = new Elysia({ prefix: '/listings' })
     const [updated] = await db.update(listings).set({
       productId: body.productId,
       marketId: body.marketId,
+      marketSku: body.marketSku ?? '',
       localPrice: body.localPrice,
       isActive: body.isActive ?? true,
       updatedAt: new Date(),

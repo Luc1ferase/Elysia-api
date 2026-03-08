@@ -65,6 +65,20 @@ export function resolveShippingFee(market: Market, product: Product, rates: Ship
   return matched?.feeLocal ?? orderedRates.at(-1)?.feeLocal ?? 0;
 }
 
+
+function resolveListingSku(listing: Listing, product: Product) {
+  if ((listing as Listing & { marketSku?: string }).marketSku?.trim()) {
+    return (listing as Listing & { marketSku: string }).marketSku.trim();
+  }
+
+  const fallbackMatch = /^db_lst_([a-z]+)_(\d+)$/i.exec(listing.id);
+  if (fallbackMatch) {
+    return `${fallbackMatch[1].toUpperCase()}-${fallbackMatch[2]}`;
+  }
+
+  return product.sku;
+}
+
 function keepFourDigits(value: number) {
   return Number(value.toFixed(4));
 }
@@ -102,7 +116,7 @@ export function calculatePricing(input: {
     productId: product.id,
     marketId: market.id,
     listingId: listing.id,
-    sku: product.sku,
+    sku: resolveListingSku(listing, product),
     name: product.name,
     size: product.size,
     weightGrams: product.weightGrams,

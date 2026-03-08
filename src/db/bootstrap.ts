@@ -48,11 +48,27 @@ export async function bootstrapDatabase() {
       id text primary key,
       product_id text not null references pricing_products(id) on delete cascade,
       market_id text not null references pricing_markets(id) on delete cascade,
+      market_sku text not null default '',
       local_price double precision not null,
       is_active boolean not null default true,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       constraint listings_product_market_unique unique (product_id, market_id)
     );
+
+    alter table pricing_listings add column if not exists market_sku text;
+
+    update pricing_listings as listing
+    set market_sku = case
+      when coalesce(listing.market_sku, '') <> '' then listing.market_sku
+      when listing.id ~ '^db_lst_[a-z]+_[0-9]+$' then upper(split_part(listing.id, '_', 3)) || '-' || split_part(listing.id, '_', 4)
+      else product.sku
+    end
+    from pricing_products as product
+    where product.id = listing.product_id
+      and coalesce(listing.market_sku, '') = '';
+
+    alter table pricing_listings alter column market_sku set default '';
+    alter table pricing_listings alter column market_sku set not null;
   `);
 }

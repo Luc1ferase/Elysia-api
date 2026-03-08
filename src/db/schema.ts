@@ -47,6 +47,7 @@ export const listings = pgTable('pricing_listings', {
   id: text('id').primaryKey(),
   productId: text('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
   marketId: text('market_id').notNull().references(() => markets.id, { onDelete: 'cascade' }),
+  marketSku: text('market_sku').notNull().default(''),
   localPrice: doublePrecision('local_price').notNull(),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
