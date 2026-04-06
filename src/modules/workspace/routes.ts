@@ -9,155 +9,80 @@ interface SnapshotPayload {
   listings: Listing[];
 }
 
+const BATCH_SIZE = 50;
+
+function buildBatchInsert(table: string, columns: string[], rows: unknown[][]) {
+  const placeholders: string[] = [];
+  const values: unknown[] = [];
+  let paramIndex = 1;
+  for (const row of rows) {
+    const rowPlaceholders = row.map(() => `$${paramIndex++}`);
+    placeholders.push(`(${rowPlaceholders.join(', ')})`);
+    values.push(...row);
+  }
+  return { text: `insert into ${table} (${columns.join(', ')}) values ${placeholders.join(', ')}`, values };
+}
+
+function chunk<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
 async function replaceWorkspaceSnapshot(snapshot: SnapshotPayload) {
   const client = await pool.connect();
 
   try {
     await client.query('begin');
 
-    for (const product of snapshot.products) {
-      await client.query(`
-        insert into pricing_products (id, sku, name, size, cost_rmb, amortized_cost_rmb, weight_grams, created_at, updated_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        on conflict (id) do update set
-          sku = excluded.sku,
-          name = excluded.name,
-          size = excluded.size,
-          cost_rmb = excluded.cost_rmb,
-          amortized_cost_rmb = excluded.amortized_cost_rmb,
-          weight_grams = excluded.weight_grams,
-          created_at = excluded.created_at,
-          updated_at = excluded.updated_at
-      `, [
-        product.id,
-        product.sku,
-        product.name,
-        product.size,
-        product.costRmb,
-        product.amortizedCostRmb,
-        product.weightGrams,
-        new Date(product.createdAt),
-        new Date(product.updatedAt),
-      ]);
+    const delListings = await client.query('delete from pricing_listings');
+    const delRates = await client.query('delete from pricing_shipping_rates');
+    const delProducts = await client.query('delete from pricing_products');
+    const delMarkets = await client.query('delete from pricing_markets');
+    console.log(`Deleted: ${delListings.rowCount} listings, ${delRates.rowCount} rates, ${delProducts.rowCount} products, ${delMarkets.rowCount} markets`);
+
+    for (const batch of chunk(snapshot.markets, BATCH_SIZE)) {
+      const { text, values } = buildBatchInsert(
+        'pricing_markets',
+        ['id', 'code', 'name', 'currency', 'exchange_rate', 'commission_rate', 'transaction_fee_rate', 'platform_shipping_rate', 'influencer_rate', 'tax_rate', 'fixed_adjustment', 'promotion_fee_cap', 'shipping_strategy', 'notes', 'created_at', 'updated_at'],
+        batch.map((m) => [m.id, m.code, m.name, m.currency, m.exchangeRate, m.commissionRate, m.transactionFeeRate, m.platformShippingRate, m.influencerRate, m.taxRate ?? 0, m.fixedAdjustment, m.promotionFeeCap, m.shippingStrategy, m.notes, new Date(m.createdAt), new Date(m.updatedAt)]),
+      );
+      await client.query(text, values);
     }
 
-    for (const market of snapshot.markets) {
-      await client.query(`
-        insert into pricing_markets (
-          id, code, name, currency, exchange_rate, commission_rate, transaction_fee_rate,
-          platform_shipping_rate, influencer_rate, tax_rate, fixed_adjustment,
-          promotion_fee_cap, shipping_strategy, notes, created_at, updated_at
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        on conflict (id) do update set
-          code = excluded.code,
-          name = excluded.name,
-          currency = excluded.currency,
-          exchange_rate = excluded.exchange_rate,
-          commission_rate = excluded.commission_rate,
-          transaction_fee_rate = excluded.transaction_fee_rate,
-          platform_shipping_rate = excluded.platform_shipping_rate,
-          influencer_rate = excluded.influencer_rate,
-          tax_rate = excluded.tax_rate,
-          fixed_adjustment = excluded.fixed_adjustment,
-          promotion_fee_cap = excluded.promotion_fee_cap,
-          shipping_strategy = excluded.shipping_strategy,
-          notes = excluded.notes,
-          created_at = excluded.created_at,
-          updated_at = excluded.updated_at
-      `, [
-        market.id,
-        market.code,
-        market.name,
-        market.currency,
-        market.exchangeRate,
-        market.commissionRate,
-        market.transactionFeeRate,
-        market.platformShippingRate,
-        market.influencerRate,
-        market.taxRate ?? 0,
-        market.fixedAdjustment,
-        market.promotionFeeCap,
-        market.shippingStrategy,
-        market.notes,
-        new Date(market.createdAt),
-        new Date(market.updatedAt),
-      ]);
+    for (const batch of chunk(snapshot.products, BATCH_SIZE)) {
+      const { text, values } = buildBatchInsert(
+        'pricing_products',
+        ['id', 'sku', 'name', 'size', 'cost_rmb', 'amortized_cost_rmb', 'weight_grams', 'created_at', 'updated_at'],
+        batch.map((p) => [p.id, p.sku, p.name, p.size, p.costRmb, p.amortizedCostRmb, p.weightGrams, new Date(p.createdAt), new Date(p.updatedAt)]),
+      );
+      await client.query(text, values);
     }
 
-    for (const rate of snapshot.shippingRates) {
-      await client.query(`
-        insert into pricing_shipping_rates (id, market_id, min_weight_grams, max_weight_grams, fee_local, created_at, updated_at)
-        values ($1, $2, $3, $4, $5, $6, $7)
-        on conflict (id) do update set
-          market_id = excluded.market_id,
-          min_weight_grams = excluded.min_weight_grams,
-          max_weight_grams = excluded.max_weight_grams,
-          fee_local = excluded.fee_local,
-          created_at = excluded.created_at,
-          updated_at = excluded.updated_at
-      `, [
-        rate.id,
-        rate.marketId,
-        rate.minWeightGrams,
-        rate.maxWeightGrams,
-        rate.feeLocal,
-        new Date(rate.createdAt),
-        new Date(rate.updatedAt),
-      ]);
+    for (const batch of chunk(snapshot.shippingRates, BATCH_SIZE)) {
+      const { text, values } = buildBatchInsert(
+        'pricing_shipping_rates',
+        ['id', 'market_id', 'min_weight_grams', 'max_weight_grams', 'fee_local', 'created_at', 'updated_at'],
+        batch.map((r) => [r.id, r.marketId, r.minWeightGrams, r.maxWeightGrams, r.feeLocal, new Date(r.createdAt), new Date(r.updatedAt)]),
+      );
+      await client.query(text, values);
     }
 
-    for (const listing of snapshot.listings) {
-      await client.query(`
-        insert into pricing_listings (id, product_id, market_id, market_sku, local_price, is_active, created_at, updated_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
-        on conflict (id) do update set
-          product_id = excluded.product_id,
-          market_id = excluded.market_id,
-          market_sku = excluded.market_sku,
-          local_price = excluded.local_price,
-          is_active = excluded.is_active,
-          created_at = excluded.created_at,
-          updated_at = excluded.updated_at
-      `, [
-        listing.id,
-        listing.productId,
-        listing.marketId,
-        (listing as Listing & { marketSku?: string }).marketSku ?? '',
-        listing.localPrice,
-        listing.isActive,
-        new Date(listing.createdAt),
-        new Date(listing.updatedAt),
-      ]);
-    }
-
-    if (snapshot.listings.length) {
-      await client.query('delete from pricing_listings where id <> all($1::text[])', [snapshot.listings.map((item) => item.id)]);
-    } else {
-      await client.query('delete from pricing_listings');
-    }
-
-    if (snapshot.shippingRates.length) {
-      await client.query('delete from pricing_shipping_rates where id <> all($1::text[])', [snapshot.shippingRates.map((item) => item.id)]);
-    } else {
-      await client.query('delete from pricing_shipping_rates');
-    }
-
-    if (snapshot.products.length) {
-      await client.query('delete from pricing_products where id <> all($1::text[])', [snapshot.products.map((item) => item.id)]);
-    } else {
-      await client.query('delete from pricing_products');
-    }
-
-    if (snapshot.markets.length) {
-      await client.query('delete from pricing_markets where id <> all($1::text[])', [snapshot.markets.map((item) => item.id)]);
-    } else {
-      await client.query('delete from pricing_markets');
+    for (const batch of chunk(snapshot.listings, BATCH_SIZE)) {
+      const { text, values } = buildBatchInsert(
+        'pricing_listings',
+        ['id', 'product_id', 'market_id', 'market_sku', 'local_price', 'is_active', 'created_at', 'updated_at'],
+        batch.map((l) => [l.id, l.productId, l.marketId, (l as Listing & { marketSku?: string }).marketSku ?? '', l.localPrice, l.isActive, new Date(l.createdAt), new Date(l.updatedAt)]),
+      );
+      await client.query(text, values);
     }
 
     await client.query('commit');
   } catch (error) {
     await client.query('rollback');
+    console.error('Insert error:', error);
     throw error;
   } finally {
     client.release();
@@ -176,4 +101,3 @@ export const workspaceRoutes = new Elysia({ prefix: '/workspace' })
     await replaceWorkspaceSnapshot(snapshot);
     return snapshot;
   });
-
