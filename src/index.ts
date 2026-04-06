@@ -10,6 +10,7 @@ import { marketRoutes } from './modules/markets/routes.js';
 import { pricingRoutes } from './modules/pricing/routes.js';
 import { productRoutes } from './modules/products/routes.js';
 import { workspaceRoutes } from './modules/workspace/routes.js';
+import { sourcingRoutes } from './modules/sourcing/routes.js';
 import { HttpError } from './lib/errors.js';
 
 await bootstrapDatabase();
@@ -41,6 +42,7 @@ const app = new Elysia({ adapter: node() })
   .use(listingRoutes)
   .use(pricingRoutes)
   .use(workspaceRoutes)
+  .use(sourcingRoutes)
   .listen({ hostname: env.host, port: env.port });
 
 console.log(`Pricing API running at http://${env.host}:${env.port}`);
